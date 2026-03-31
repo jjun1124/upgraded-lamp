@@ -1,67 +1,95 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>매장 키오스크 스캐너</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: #fff; padding: 20px; }
-        #reader { width: 500px; margin: 20px auto; background: #000; border: 5px solid #ffea00; }
-        .result-card { background: #444; padding: 30px; border-radius: 20px; display: none; margin-top: 20px; }
-        h2 { color: #ffea00; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>키오스크</title>
+
+<!-- QR 스캐너 -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body { background:#000; color:#fff; text-align:center; }
+#reader { width:300px; margin:auto; }
+#result { margin-top:20px; font-size:24px; }
+</style>
 </head>
+
 <body>
-    <h1>키오스크 QR 주문 스캐너</h1>
-    <p>휴대폰의 QR 코드를 카메라에 비추어 주세요.</p>
-    
-    <div id="reader"></div>
 
-    <div id="result" class="result-card">
-        <h2 id="res-menu">주문 메뉴 확인 중...</h2>
-        <p id="res-info"></p>
-        <h1 style="color:#00ff44">주문이 정상 접수되었습니다!</h1>
-    </div>
+<h1>QR 스캔</h1>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
+<div id="reader"></div>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBCS0LCBvuVl2bhSawHJl6g7ry67Aj1gu4",
-            authDomain: "find-korea.firebaseapp.com",
-            projectId: "find-korea",
-            databaseURL: "https://find-korea-default-rtdb.firebaseio.com",
-            appId: "1:672927096828:web:597ab26d4ed32e97bd9c79"
-        };
-        const app = initializeApp(firebaseConfig);
-        const db = ref(getDatabase(app));
+<div id="result">대기중...</div>
 
-        function onScanSuccess(decodedText) {
-            // 스캔된 QR 코드(주문 ID)로 Firebase 조회
-            get(child(db, `orders/${decodedText}`)).then((snapshot) => {
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    document.getElementById('reader').style.display = 'none';
-                    document.getElementById('result').style.display = 'block';
-                    document.getElementById('res-menu').innerText = "메뉴: " + data.menu;
-                    document.getElementById('res-info').innerText = "매장: " + data.store + " | 결제금액: " + data.price + "원";
-                    
-                    // 음성 안내 (키오스크용)
-                    const u = new SpeechSynthesisUtterance(data.menu + " 주문이 확인되었습니다. 잠시만 기다려주세요.");
-                    u.lang = 'ko-KR';
-                    window.speechSynthesis.speak(u);
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
-                    // 5초 후 다시 스캔 화면으로
-                    setTimeout(() => location.reload(), 5000);
-                } else {
-                    alert("유효하지 않은 주문 코드입니다.");
+// 🔥 Firebase 동일하게 맞춰야됨
+const firebaseConfig = {
+    apiKey: "AIzaSyBCS0LCBvuVl2bhSawHJl6g7ry67Aj1gu4",
+    authDomain: "find-korea.firebaseapp.com",
+    databaseURL: "https://find-korea-default-rtdb.firebaseio.com",
+    projectId: "find-korea",
+    appId: "1:672927096828:web:597ab26d4ed32e97bd9c79"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// 🔥 QR 스캔 성공
+function onScanSuccess(decodedText) {
+    document.getElementById("result").innerText = "조회중...";
+
+    loadOrder(decodedText);
+}
+
+// 🔥 주문 조회
+async function loadOrder(orderId) {
+    try {
+        const snapshot = await get(ref(db, "orders"));
+
+        if(snapshot.exists()){
+            const data = snapshot.val();
+
+            let found = null;
+
+            for (let key in data) {
+                if (data[key].id === orderId) {
+                    found = data[key];
+                    break;
                 }
-            });
-        }
+            }
 
-        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-        html5QrcodeScanner.render(onScanSuccess);
-    </script>
+            if(found){
+                document.getElementById("result").innerText =
+                    "매장: " + found.store + "\n" +
+                    "메뉴: " + found.menu + "\n" +
+                    "가격: " + found.price + "원";
+            } else {
+                document.getElementById("result").innerText = "주문 없음";
+            }
+        }
+    } catch(e){
+        console.error(e);
+        document.getElementById("result").innerText = "오류 발생";
+    }
+}
+
+// 🔥 카메라 시작
+const html5QrCode = new Html5Qrcode("reader");
+html5QrCode.start(
+    { facingMode: "environment" },
+    {
+        fps: 10,
+        qrbox: 250
+    },
+    onScanSuccess
+);
+</script>
+
 </body>
 </html>
